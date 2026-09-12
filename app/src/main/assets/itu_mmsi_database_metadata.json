@@ -1,7 +1,7 @@
 {
   "releaseVersion": "ITU-R M.585-9",
-  "buildDate": "2026-09-12T11:58:09Z",
-  "buildTimestamp": 1789214289829,
+  "buildDate": "2026-09-12T12:15:00Z",
+  "buildTimestamp": 1789215300212,
   "source": "International Telecommunication Union Maritime Identification Digits",
   "status": "synchronized_at_build"
 }
