@@ -74,6 +74,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.MmsiEntity
 import com.example.ui.components.MmsiDirectorySheet
 import com.example.ui.components.MmsiInfoCard
+import com.example.ui.components.MmsiInfoDialog
 import com.example.ui.components.MmsiKeypad
 import com.example.ui.theme.MaritimeBlue
 import com.example.ui.theme.MaritimeCyan
@@ -90,7 +91,6 @@ fun MmsiLookupScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showInfoDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val popularPresets = listOf(
@@ -128,7 +128,7 @@ fun MmsiLookupScreen(
                                 modifier = Modifier.size(11.dp)
                             )
                             Text(
-                                text = "100% Offline ITU Database",
+                                text = "Offline DB • Updated ${uiState.lastUpdatedDate}",
                                 fontSize = 11.sp,
                                 color = MaritimeCyan,
                                 fontWeight = FontWeight.Medium
@@ -138,12 +138,12 @@ fun MmsiLookupScreen(
                 },
                 navigationIcon = {
                     IconButton(
-                        onClick = { showInfoDialog = true },
+                        onClick = { viewModel.setShowInfoDialog(true) },
                         modifier = Modifier.testTag("mmsi_info_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
-                            contentDescription = "MMSI guide and specifications",
+                            contentDescription = "MMSI guide, database update and contact",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -580,51 +580,18 @@ fun MmsiLookupScreen(
         )
     }
 
-    // Info Dialog
-    if (showInfoDialog) {
-        AlertDialog(
-            onDismissRequest = { showInfoDialog = false },
-            title = {
-                Text(
-                    text = "Maritime MMSI & MID Guide",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "A Maritime Mobile Service Identity (MMSI) is a 9-digit number transmitted via VHF DSC and AIS.",
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        text = "• Digits 1–3 (MID): Maritime Identification Digits represent the vessel's flag administration / country.",
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        text = "• Coastal Stations: Prefixed with 00 (e.g. 00 MID xxxx)",
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        text = "• Group Stations: Prefixed with 0 (e.g. 0 MID xxxxx)",
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        text = "• SAR Aircraft: Prefixed with 111 (e.g. 111 MID xxx)",
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        text = "• Database: Fully bundled local database according to ITU Recommendation ITU-R M.585.",
-                        fontSize = 13.sp
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { showInfoDialog = false },
-                    modifier = Modifier.testTag("dialog_ok_btn")
-                ) {
-                    Text("Understood", color = MaritimeCyan)
-                }
+    // Info & Database Update Dialog
+    if (uiState.showInfoDialog) {
+        MmsiInfoDialog(
+            lastUpdatedDate = uiState.lastUpdatedDate,
+            databaseVersion = uiState.databaseVersion,
+            isUpdating = uiState.isUpdatingDatabase,
+            updateResultMessage = uiState.updateResultMessage,
+            updateResultSuccess = uiState.updateResultSuccess,
+            onUpdateClick = { viewModel.updateDatabaseOnline() },
+            onDismiss = {
+                viewModel.setShowInfoDialog(false)
+                viewModel.clearUpdateMessage()
             }
         )
     }

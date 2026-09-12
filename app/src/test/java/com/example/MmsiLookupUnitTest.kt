@@ -55,4 +55,11 @@ class MmsiLookupUnitTest {
         // ITU database should have over 200 registrations
         assert(MmsiDataSeed.allCodes.size >= 150)
     }
+
+    @Test
+    fun testDefaultMetadataValues() {
+        assert(com.example.data.AppDatabase.DEFAULT_LAST_UPDATED.isNotBlank())
+        assert(com.example.data.AppDatabase.DEFAULT_DB_VERSION.contains("ITU-R M.585"))
+        assert(com.example.data.AppDatabase.BUILD_TIMESTAMP >= 0L)
+    }
 }

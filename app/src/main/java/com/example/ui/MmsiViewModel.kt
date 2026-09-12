@@ -25,9 +25,15 @@ data class MmsiUiState(
     val isExactMidFound: Boolean = false,
     val recentLookups: List<RecentLookupEntity> = emptyList(),
     val showDirectorySheet: Boolean = false,
+    val showInfoDialog: Boolean = false,
     val directorySearchQuery: String = "",
     val selectedRegionFilter: String = "All",
-    val directoryResults: List<MmsiEntity> = emptyList()
+    val directoryResults: List<MmsiEntity> = emptyList(),
+    val lastUpdatedDate: String = AppDatabase.DEFAULT_LAST_UPDATED,
+    val databaseVersion: String = AppDatabase.DEFAULT_DB_VERSION,
+    val isUpdatingDatabase: Boolean = false,
+    val updateResultMessage: String? = null,
+    val updateResultSuccess: Boolean? = null
 )
 
 class MmsiViewModel(application: Application) : AndroidViewModel(application) {
@@ -40,6 +46,9 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
     private val _showDirectorySheet = MutableStateFlow(false)
     val showDirectorySheet: StateFlow<Boolean> = _showDirectorySheet.asStateFlow()
 
+    private val _showInfoDialog = MutableStateFlow(false)
+    val showInfoDialog: StateFlow<Boolean> = _showInfoDialog.asStateFlow()
+
     private val _directorySearchQuery = MutableStateFlow("")
     val directorySearchQuery: StateFlow<String> = _directorySearchQuery.asStateFlow()
 
@@ -51,19 +60,24 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
     private val _prefixMatches = MutableStateFlow<List<MmsiEntity>>(emptyList())
     private val _stationType = MutableStateFlow<String?>(null)
 
+    private val _isUpdatingDatabase = MutableStateFlow(false)
+    private val _updateResultMessage = MutableStateFlow<String?>(null)
+    private val _updateResultSuccess = MutableStateFlow<Boolean?>(null)
+
     val uiState: StateFlow<MmsiUiState>
 
     init {
         val db = AppDatabase.getDatabase(application)
         repository = MmsiRepository(db.mmsiDao())
 
-        // Ensure database has seeds in background
         viewModelScope.launch {
             repository.ensureDatabaseSeeded()
         }
 
         val allCodesFlow = repository.getAllCodes()
         val recentLookupsFlow = repository.getRecentLookups()
+        val lastUpdatedFlow = repository.getLastUpdatedDate()
+        val dbVersionFlow = repository.getDatabaseVersion()
 
         val directoryFilteredFlow = combine(
             allCodesFlow,
@@ -84,51 +98,90 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        uiState = combine(
+        val baseInfoFlow = combine(
             _inputDigits,
             _currentResult,
             _prefixMatches,
             _relatedMids,
-            _stationType,
-            recentLookupsFlow,
-            _showDirectorySheet,
-            _directorySearchQuery,
-            _selectedRegionFilter,
-            directoryFilteredFlow
-        ) { args ->
-            val input = args[0] as String
-            val currentResult = args[1] as MmsiEntity?
-            val prefixMatches = args[2] as List<MmsiEntity>
-            val relatedMids = args[3] as List<MmsiEntity>
-            val stationType = args[4] as String?
-            val recents = args[5] as List<RecentLookupEntity>
-            val showSheet = args[6] as Boolean
-            val dirQuery = args[7] as String
-            val regionFilter = args[8] as String
-            val dirResults = args[9] as List<MmsiEntity>
+            _stationType
+        ) { input, result, matches, related, stationType ->
+            BaseLookupState(input, result, matches, related, stationType)
+        }
 
+        val metaFlow = combine(
+            lastUpdatedFlow,
+            dbVersionFlow,
+            _isUpdatingDatabase,
+            _updateResultMessage,
+            _updateResultSuccess
+        ) { lastUpdated, dbVersion, isUpdating, updateMsg, updateSuccess ->
+            MetaState(lastUpdated, dbVersion, isUpdating, updateMsg, updateSuccess)
+        }
+
+        val dialogFlow = combine(
+            _showDirectorySheet,
+            _showInfoDialog,
+            _directorySearchQuery,
+            _selectedRegionFilter
+        ) { showDir, showInfo, dirQuery, regFilter ->
+            DialogState(showDir, showInfo, dirQuery, regFilter)
+        }
+
+        uiState = combine(
+            baseInfoFlow,
+            recentLookupsFlow,
+            directoryFilteredFlow,
+            metaFlow,
+            dialogFlow
+        ) { base, recents, dirResults, meta, dialog ->
             MmsiUiState(
-                inputDigits = input,
-                currentResult = currentResult,
-                prefixMatches = prefixMatches,
-                relatedMids = relatedMids,
-                stationTypeDescription = stationType,
-                isExactMidFound = currentResult != null,
+                inputDigits = base.input,
+                currentResult = base.result,
+                prefixMatches = base.matches,
+                relatedMids = base.related,
+                stationTypeDescription = base.stationType,
+                isExactMidFound = base.result != null,
                 recentLookups = recents,
-                showDirectorySheet = showSheet,
-                directorySearchQuery = dirQuery,
-                selectedRegionFilter = regionFilter,
-                directoryResults = dirResults
+                showDirectorySheet = dialog.showDir,
+                showInfoDialog = dialog.showInfo,
+                directorySearchQuery = dialog.dirQuery,
+                selectedRegionFilter = dialog.regFilter,
+                directoryResults = dirResults,
+                lastUpdatedDate = meta.lastUpdated,
+                databaseVersion = meta.dbVersion,
+                isUpdatingDatabase = meta.isUpdating,
+                updateResultMessage = meta.updateMsg,
+                updateResultSuccess = meta.updateSuccess
             )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = MmsiUiState()
         )
-
-        // Seed default selection with a prominent maritime code: 235 (United Kingdom) or empty
-        // Let's start with empty so user sees the clean prompt "Enter first 3 digits"
     }
+
+    private data class BaseLookupState(
+        val input: String,
+        val result: MmsiEntity?,
+        val matches: List<MmsiEntity>,
+        val related: List<MmsiEntity>,
+        val stationType: String?
+    )
+
+    private data class MetaState(
+        val lastUpdated: String,
+        val dbVersion: String,
+        val isUpdating: Boolean,
+        val updateMsg: String?,
+        val updateSuccess: Boolean?
+    )
+
+    private data class DialogState(
+        val showDir: Boolean,
+        val showInfo: Boolean,
+        val dirQuery: String,
+        val regFilter: String
+    )
 
     fun onDigitEntered(digit: Char) {
         if (!digit.isDigit()) return
@@ -171,7 +224,6 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        // Determine effective 3-digit MID and station format
         val (effectiveMid, stationType) = parseMmsiMid(input)
         _stationType.value = stationType
 
@@ -181,7 +233,6 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
             _prefixMatches.value = emptyList()
 
             if (result != null) {
-                // Record in recent lookups
                 viewModelScope.launch {
                     repository.recordLookup(result.mid, result.countryName, result.flagEmoji)
                     val countryMids = repository.getCodesForCountry(result.countryName)
@@ -191,7 +242,6 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
                 _relatedMids.value = emptyList()
             }
         } else {
-            // Partial 1 or 2 digits
             _currentResult.value = null
             _relatedMids.value = emptyList()
             val matches = MmsiDataSeed.allCodes.filter { it.mid.startsWith(effectiveMid) }
@@ -200,13 +250,6 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun parseMmsiMid(input: String): Pair<String, String?> {
-        // Ship Station: MIDxxxxxx (9 digits) -> MID is first 3 digits
-        // Coast Station: 00MIDxxxx -> MID is digits 3..5
-        // Group Station: 0MIDxxxxx -> MID is digits 2..4
-        // SAR Aircraft: 111MIDxxx -> MID is digits 4..6
-        // AIS AtoN: 99MIDxxxx -> MID is digits 3..5
-        // SART / MOB: 970 / 972 / 974 ...
-
         if (input.startsWith("00")) {
             val remaining = input.removePrefix("00")
             val mid = remaining.take(3)
@@ -240,6 +283,10 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
         _showDirectorySheet.value = show
     }
 
+    fun setShowInfoDialog(show: Boolean) {
+        _showInfoDialog.value = show
+    }
+
     fun setDirectoryQuery(query: String) {
         _directorySearchQuery.value = query
     }
@@ -258,5 +305,24 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.clearRecents()
         }
+    }
+
+    fun updateDatabaseOnline() {
+        if (_isUpdatingDatabase.value) return
+        _isUpdatingDatabase.value = true
+        _updateResultMessage.value = null
+        _updateResultSuccess.value = null
+
+        viewModelScope.launch {
+            val result = repository.updateDatabaseOnline(getApplication())
+            _isUpdatingDatabase.value = false
+            _updateResultMessage.value = result.message
+            _updateResultSuccess.value = result.success
+        }
+    }
+
+    fun clearUpdateMessage() {
+        _updateResultMessage.value = null
+        _updateResultSuccess.value = null
     }
 }

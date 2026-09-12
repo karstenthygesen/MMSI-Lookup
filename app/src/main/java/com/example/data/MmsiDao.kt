@@ -41,4 +41,14 @@ interface MmsiDao {
 
     @Query("DELETE FROM recent_lookups")
     suspend fun clearRecentLookups()
+
+    // App Settings / Database metadata
+    @Query("SELECT value FROM app_settings WHERE key = :key LIMIT 1")
+    fun getSetting(key: String): Flow<String?>
+
+    @Query("SELECT value FROM app_settings WHERE key = :key LIMIT 1")
+    suspend fun getSettingDirect(key: String): String?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun setSetting(setting: AppSettingEntity)
 }

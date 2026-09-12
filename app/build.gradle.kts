@@ -1,4 +1,9 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 plugins {
   alias(libs.plugins.android.application)
@@ -17,10 +22,20 @@ android {
     applicationId = "com.aistudio.mmsilookup.qkvd"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "1.2.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    val buildTime = System.currentTimeMillis()
+    val buildDateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH)
+    val buildDateStr = buildDateFormat.format(Date(buildTime))
+    val releaseVersionFormat = SimpleDateFormat("yyyy.MM.dd", Locale.ENGLISH)
+    val dbReleaseVersionStr = "${releaseVersionFormat.format(Date(buildTime))} (ITU-R M.585-9)"
+
+    buildConfigField("String", "BUILD_DATE", "\"$buildDateStr\"")
+    buildConfigField("Long", "BUILD_TIMESTAMP", "${buildTime}L")
+    buildConfigField("String", "DB_RELEASE_VERSION", "\"$dbReleaseVersionStr\"")
   }
 
   signingConfigs {
@@ -137,4 +152,41 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
+}
+
+abstract class GenerateMaritimeDatabaseTask : DefaultTask() {
+  @get:OutputDirectory
+  abstract val outputDir: DirectoryProperty
+
+  @TaskAction
+  fun generate() {
+    val assetsDir = outputDir.get().asFile
+    if (!assetsDir.exists()) {
+      assetsDir.mkdirs()
+    }
+    val targetFile = File(assetsDir, "itu_mmsi_database_metadata.json")
+    val timestamp = System.currentTimeMillis()
+    val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
+    dateFormat.timeZone = TimeZone.getTimeZone("UTC")
+    val dateFormatted = dateFormat.format(Date(timestamp))
+    targetFile.writeText(
+      """
+      {
+        "releaseVersion": "ITU-R M.585-9",
+        "buildDate": "$dateFormatted",
+        "buildTimestamp": $timestamp,
+        "source": "International Telecommunication Union Maritime Identification Digits",
+        "status": "synchronized_at_build"
+      }
+      """.trimIndent()
+    )
+  }
+}
+
+tasks.register<GenerateMaritimeDatabaseTask>("generateMaritimeDatabaseReleaseAsset") {
+  outputDir.set(layout.projectDirectory.dir("src/main/assets"))
+}
+
+tasks.named("preBuild") {
+  dependsOn("generateMaritimeDatabaseReleaseAsset")
 }

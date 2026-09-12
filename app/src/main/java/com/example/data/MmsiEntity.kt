@@ -20,3 +20,9 @@ data class RecentLookupEntity(
     val flagEmoji: String,
     val timestamp: Long = System.currentTimeMillis()
 )
+
+@Entity(tableName = "app_settings")
+data class AppSettingEntity(
+    @PrimaryKey val key: String,
+    val value: String
+)
