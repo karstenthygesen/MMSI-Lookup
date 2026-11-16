@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,10 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.MmsiEntity
-import com.example.ui.theme.MaritimeBlue
-import com.example.ui.theme.MaritimeCyan
-import com.example.ui.theme.NauticalGold
-import com.example.ui.theme.SlateTextSecondary
+import com.example.ui.theme.MaritimeTheme
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -67,6 +65,10 @@ fun MmsiInfoCard(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val isBridgeNight = MaritimeTheme.isBridgeNight
+    val accentColor = MaritimeTheme.accent
+    val goldColor = MaritimeTheme.gold
+    val secondaryTextColor = MaritimeTheme.textSecondary
 
     Card(
         modifier = modifier
@@ -76,33 +78,34 @@ fun MmsiInfoCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        border = if (isBridgeNight) BorderStroke(1.dp, MaterialTheme.colorScheme.outline) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isBridgeNight) 0.dp else 6.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Header Row: Flag + Country Info + Copy Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 FlagBadge(
                     flagEmoji = result.flagEmoji,
                     isoCode = result.isoCode,
-                    size = 72.dp
+                    badgeSize = 96.dp
                 )
 
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = result.countryName,
-                        fontSize = 22.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.testTag("country_name_text")
@@ -115,15 +118,17 @@ fun MmsiInfoCard(
                         // MID Badge
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = MaritimeCyan.copy(alpha = 0.15f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaritimeCyan.copy(alpha = 0.5f))
+                            color = accentColor.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f))
                         ) {
                             Text(
                                 text = "MID ${result.mid}",
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaritimeCyan
+                                color = accentColor,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
 
@@ -137,7 +142,9 @@ fun MmsiInfoCard(
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -151,7 +158,7 @@ fun MmsiInfoCard(
                         Toast.makeText(context, "Copied $text", Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .testTag("copy_mmsi_btn")
@@ -160,7 +167,7 @@ fun MmsiInfoCard(
                         imageVector = Icons.Default.ContentCopy,
                         contentDescription = "Copy details",
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -179,13 +186,13 @@ fun MmsiInfoCard(
                 Icon(
                     imageVector = Icons.Default.Public,
                     contentDescription = null,
-                    tint = NauticalGold,
+                    tint = goldColor,
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = "ITU Region:",
                     fontSize = 13.sp,
-                    color = SlateTextSecondary
+                    color = secondaryTextColor
                 )
                 Text(
                     text = result.region,
@@ -200,7 +207,7 @@ fun MmsiInfoCard(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = androidx.compose.foundation.BorderStroke(
+                    border = BorderStroke(
                         1.dp,
                         MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                     ),
@@ -214,7 +221,7 @@ fun MmsiInfoCard(
                         Icon(
                             imageVector = Icons.Default.Radio,
                             contentDescription = null,
-                            tint = MaritimeCyan,
+                            tint = accentColor,
                             modifier = Modifier.size(18.dp)
                         )
                         Column {
@@ -222,7 +229,7 @@ fun MmsiInfoCard(
                                 text = "Station Identification",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaritimeCyan
+                                color = accentColor
                             )
                             Text(
                                 text = stationTypeDescription,
@@ -243,7 +250,7 @@ fun MmsiInfoCard(
                         text = "Other MIDs for ${result.countryName}:",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = SlateTextSecondary
+                        color = secondaryTextColor
                     )
 
                     FlowRow(

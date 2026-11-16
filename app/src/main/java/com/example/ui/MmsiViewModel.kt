@@ -7,7 +7,10 @@ import com.example.data.AppDatabase
 import com.example.data.MmsiDataSeed
 import com.example.data.MmsiEntity
 import com.example.data.MmsiRepository
+import com.example.data.NetworkMonitor
 import com.example.data.RecentLookupEntity
+import com.example.util.SolarTimeCalculator
+import com.example.util.SolarTwilightInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +18,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class MmsiUiState(
     val inputDigits: String = "",
@@ -31,14 +37,26 @@ data class MmsiUiState(
     val directoryResults: List<MmsiEntity> = emptyList(),
     val lastUpdatedDate: String = AppDatabase.DEFAULT_LAST_UPDATED,
     val databaseVersion: String = AppDatabase.DEFAULT_DB_VERSION,
+    val isBridgeNightMode: Boolean = false,
+    val isAutoNightModeEnabled: Boolean = true,
+    val isAfterSundown: Boolean = false,
+    val solarStatusDescription: String = "",
+    val solarSunriseTimeText: String = "",
+    val solarSunsetTimeText: String = "",
+    val solarTimeZoneId: String = "",
     val isUpdatingDatabase: Boolean = false,
+    val isAutoUpdating: Boolean = false,
     val updateResultMessage: String? = null,
-    val updateResultSuccess: Boolean? = null
+    val updateResultSuccess: Boolean? = null,
+    val isInternetConnected: Boolean = false,
+    val nextAutoUpdateDueText: String = "",
+    val isWeeklyUpdateDue: Boolean = false
 )
 
 class MmsiViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: MmsiRepository
+    private val networkMonitor = NetworkMonitor(application)
 
     private val _inputDigits = MutableStateFlow("")
     val inputDigits: StateFlow<String> = _inputDigits.asStateFlow()
@@ -61,8 +79,16 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
     private val _stationType = MutableStateFlow<String?>(null)
 
     private val _isUpdatingDatabase = MutableStateFlow(false)
+    private val _isAutoUpdating = MutableStateFlow(false)
     private val _updateResultMessage = MutableStateFlow<String?>(null)
     private val _updateResultSuccess = MutableStateFlow<Boolean?>(null)
+    private val _isInternetConnected = MutableStateFlow(networkMonitor.hasCurrentInternetConnection())
+    private val _nextAutoUpdateDueText = MutableStateFlow("Checking schedule...")
+    private val _isWeeklyUpdateDue = MutableStateFlow(false)
+
+    private val _solarTwilightInfo = MutableStateFlow(SolarTimeCalculator.getSolarTwilightInfo(application))
+
+    private var lastAutoUpdateAttemptTime = 0L
 
     val uiState: StateFlow<MmsiUiState>
 
@@ -70,14 +96,44 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
         val db = AppDatabase.getDatabase(application)
         repository = MmsiRepository(db.mmsiDao())
 
+        // Calculate astronomical sundown/sunrise based on device TimeZone (no location permission required)
+        val initialTwilight = SolarTimeCalculator.getSolarTwilightInfo(application)
+        _solarTwilightInfo.value = initialTwilight
+
         viewModelScope.launch {
             repository.ensureDatabaseSeeded()
+
+            // If auto night mode is enabled, sync bridge night mode with current astronomical time:
+            // Turns ON during night, turns OFF during daytime!
+            val autoNightEnabled = repository.isAutoNightModeEnabledDirect()
+            if (autoNightEnabled) {
+                repository.setBridgeNightMode(initialTwilight.isAfterSundown)
+            }
+        }
+
+        // Real-time network detection: automatically trigger update when internet is connected and eligible (once per week)
+        viewModelScope.launch {
+            networkMonitor.isConnected.collect { connected ->
+                _isInternetConnected.value = connected
+                if (connected) {
+                    checkAndAutoUpdateIfEligible()
+                }
+            }
+        }
+
+        // Continuously update schedule information based on last update timestamp
+        viewModelScope.launch {
+            repository.getLastUpdateTimestamp().collect { lastTimestamp ->
+                updateScheduleInfo(lastTimestamp)
+            }
         }
 
         val allCodesFlow = repository.getAllCodes()
         val recentLookupsFlow = repository.getRecentLookups()
         val lastUpdatedFlow = repository.getLastUpdatedDate()
         val dbVersionFlow = repository.getDatabaseVersion()
+        val bridgeNightModeFlow = repository.getBridgeNightMode()
+        val autoNightModeFlow = repository.getAutoNightModeEnabled()
 
         val directoryFilteredFlow = combine(
             allCodesFlow,
@@ -108,14 +164,60 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
             BaseLookupState(input, result, matches, related, stationType)
         }
 
-        val metaFlow = combine(
+        val syncStateFlow = combine(
+            _isUpdatingDatabase,
+            _isAutoUpdating,
+            _updateResultMessage,
+            _updateResultSuccess,
+            _isInternetConnected
+        ) { isUpdating, isAuto, updateMsg, updateSuccess, isConnected ->
+            SyncState(isUpdating, isAuto, updateMsg, updateSuccess, isConnected)
+        }
+
+        val scheduleStateFlow = combine(
             lastUpdatedFlow,
             dbVersionFlow,
-            _isUpdatingDatabase,
-            _updateResultMessage,
-            _updateResultSuccess
-        ) { lastUpdated, dbVersion, isUpdating, updateMsg, updateSuccess ->
-            MetaState(lastUpdated, dbVersion, isUpdating, updateMsg, updateSuccess)
+            _nextAutoUpdateDueText,
+            _isWeeklyUpdateDue
+        ) { lastUpdated, dbVersion, nextDueText, isDue ->
+            ScheduleState(lastUpdated, dbVersion, nextDueText, isDue)
+        }
+
+        val nightModeFlow = combine(
+            bridgeNightModeFlow,
+            autoNightModeFlow,
+            _solarTwilightInfo
+        ) { isBridgeNight, isAutoNight, solarInfo ->
+            NightModeState(
+                isBridgeNight = isBridgeNight,
+                isAutoNight = isAutoNight,
+                isAfterSundown = solarInfo.isAfterSundown,
+                statusDescription = solarInfo.statusDescription,
+                sunriseTime = solarInfo.sunriseTimeText,
+                sunsetTime = solarInfo.sunsetTimeText,
+                timeZoneId = solarInfo.timeZoneId
+            )
+        }
+
+        val metaFlow = combine(syncStateFlow, scheduleStateFlow, nightModeFlow) { sync, sched, night ->
+            MetaState(
+                lastUpdated = sched.lastUpdated,
+                dbVersion = sched.dbVersion,
+                isBridgeNightMode = night.isBridgeNight,
+                isAutoNightModeEnabled = night.isAutoNight,
+                isAfterSundown = night.isAfterSundown,
+                solarStatusDescription = night.statusDescription,
+                solarSunriseTimeText = night.sunriseTime,
+                solarSunsetTimeText = night.sunsetTime,
+                solarTimeZoneId = night.timeZoneId,
+                nextAutoUpdateDueText = sched.nextDueText,
+                isWeeklyUpdateDue = sched.isDue,
+                isUpdating = sync.isUpdating,
+                isAutoUpdating = sync.isAutoUpdating,
+                updateMsg = sync.updateMsg,
+                updateSuccess = sync.updateSuccess,
+                isInternetConnected = sync.isConnected
+            )
         }
 
         val dialogFlow = combine(
@@ -131,9 +233,9 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
             baseInfoFlow,
             recentLookupsFlow,
             directoryFilteredFlow,
-            metaFlow,
-            dialogFlow
-        ) { base, recents, dirResults, meta, dialog ->
+            dialogFlow,
+            metaFlow
+        ) { base, recents, dirResults, dialog, meta ->
             MmsiUiState(
                 inputDigits = base.input,
                 currentResult = base.result,
@@ -149,15 +251,76 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
                 directoryResults = dirResults,
                 lastUpdatedDate = meta.lastUpdated,
                 databaseVersion = meta.dbVersion,
+                isBridgeNightMode = meta.isBridgeNightMode,
+                isAutoNightModeEnabled = meta.isAutoNightModeEnabled,
+                isAfterSundown = meta.isAfterSundown,
+                solarStatusDescription = meta.solarStatusDescription,
+                solarSunriseTimeText = meta.solarSunriseTimeText,
+                solarSunsetTimeText = meta.solarSunsetTimeText,
+                solarTimeZoneId = meta.solarTimeZoneId,
                 isUpdatingDatabase = meta.isUpdating,
+                isAutoUpdating = meta.isAutoUpdating,
                 updateResultMessage = meta.updateMsg,
-                updateResultSuccess = meta.updateSuccess
+                updateResultSuccess = meta.updateSuccess,
+                isInternetConnected = meta.isInternetConnected,
+                nextAutoUpdateDueText = meta.nextAutoUpdateDueText,
+                isWeeklyUpdateDue = meta.isWeeklyUpdateDue
             )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = MmsiUiState()
         )
+    }
+
+    private fun updateScheduleInfo(lastTimestamp: Long) {
+        val now = System.currentTimeMillis()
+        val buildTime = AppDatabase.BUILD_TIMESTAMP
+        val effectiveLast = if (lastTimestamp > 0L) lastTimestamp else buildTime
+        if (effectiveLast <= 0L) {
+            _nextAutoUpdateDueText.value = "Eligible to update on internet connection"
+            _isWeeklyUpdateDue.value = true
+        } else {
+            val dueTime = effectiveLast + AppDatabase.ONE_WEEK_MILLIS
+            if (now >= dueTime) {
+                _nextAutoUpdateDueText.value = "Weekly update due (will auto-sync when online)"
+                _isWeeklyUpdateDue.value = true
+            } else {
+                val daysRemaining = maxOf(1L, ((dueTime - now) / (1000L * 60 * 60 * 24)))
+                val dateFormatted = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH).format(Date(dueTime))
+                _nextAutoUpdateDueText.value = "In $daysRemaining day(s) ($dateFormatted)"
+                _isWeeklyUpdateDue.value = false
+            }
+        }
+    }
+
+    fun checkAndAutoUpdateIfEligible() {
+        if (_isUpdatingDatabase.value) return
+
+        viewModelScope.launch {
+            val isDue = repository.isWeeklyUpdateDue()
+            if (!isDue) return@launch
+
+            val now = System.currentTimeMillis()
+            if (now - lastAutoUpdateAttemptTime < 30 * 60 * 1000L) {
+                return@launch
+            }
+            lastAutoUpdateAttemptTime = now
+
+            _isUpdatingDatabase.value = true
+            _isAutoUpdating.value = true
+
+            val result = repository.updateDatabaseOnline(getApplication(), isAutoSync = true)
+
+            _isUpdatingDatabase.value = false
+            _isAutoUpdating.value = false
+
+            if (result.success) {
+                _updateResultMessage.value = "Weekly auto-update complete: Synchronized latest ITU maritime registration codes."
+                _updateResultSuccess.value = true
+                updateScheduleInfo(now)
+            }
+        }
     }
 
     private data class BaseLookupState(
@@ -168,12 +331,48 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
         val stationType: String?
     )
 
+    private data class SyncState(
+        val isUpdating: Boolean,
+        val isAutoUpdating: Boolean,
+        val updateMsg: String?,
+        val updateSuccess: Boolean?,
+        val isConnected: Boolean
+    )
+
+    private data class ScheduleState(
+        val lastUpdated: String,
+        val dbVersion: String,
+        val nextDueText: String,
+        val isDue: Boolean
+    )
+
+    private data class NightModeState(
+        val isBridgeNight: Boolean,
+        val isAutoNight: Boolean,
+        val isAfterSundown: Boolean,
+        val statusDescription: String,
+        val sunriseTime: String,
+        val sunsetTime: String,
+        val timeZoneId: String
+    )
+
     private data class MetaState(
         val lastUpdated: String,
         val dbVersion: String,
+        val isBridgeNightMode: Boolean,
+        val isAutoNightModeEnabled: Boolean,
+        val isAfterSundown: Boolean,
+        val solarStatusDescription: String,
+        val solarSunriseTimeText: String,
+        val solarSunsetTimeText: String,
+        val solarTimeZoneId: String,
+        val nextAutoUpdateDueText: String,
+        val isWeeklyUpdateDue: Boolean,
         val isUpdating: Boolean,
+        val isAutoUpdating: Boolean,
         val updateMsg: String?,
-        val updateSuccess: Boolean?
+        val updateSuccess: Boolean?,
+        val isInternetConnected: Boolean
     )
 
     private data class DialogState(
@@ -310,19 +509,52 @@ class MmsiViewModel(application: Application) : AndroidViewModel(application) {
     fun updateDatabaseOnline() {
         if (_isUpdatingDatabase.value) return
         _isUpdatingDatabase.value = true
+        _isAutoUpdating.value = false
         _updateResultMessage.value = null
         _updateResultSuccess.value = null
 
         viewModelScope.launch {
-            val result = repository.updateDatabaseOnline(getApplication())
+            val result = repository.updateDatabaseOnline(getApplication(), isAutoSync = false)
             _isUpdatingDatabase.value = false
             _updateResultMessage.value = result.message
             _updateResultSuccess.value = result.success
+            if (result.success) {
+                updateScheduleInfo(System.currentTimeMillis())
+            }
         }
     }
 
     fun clearUpdateMessage() {
         _updateResultMessage.value = null
         _updateResultSuccess.value = null
+    }
+
+    fun toggleBridgeNightMode() {
+        val next = !uiState.value.isBridgeNightMode
+        viewModelScope.launch {
+            repository.setBridgeNightMode(next)
+        }
+    }
+
+    fun setBridgeNightMode(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setBridgeNightMode(enabled)
+        }
+    }
+
+    fun toggleAutoNightMode() {
+        val next = !uiState.value.isAutoNightModeEnabled
+        setAutoNightMode(next)
+    }
+
+    fun setAutoNightMode(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setAutoNightModeEnabled(enabled)
+            if (enabled) {
+                val info = SolarTimeCalculator.getSolarTwilightInfo(getApplication())
+                _solarTwilightInfo.value = info
+                repository.setBridgeNightMode(info.isAfterSundown)
+            }
+        }
     }
 }

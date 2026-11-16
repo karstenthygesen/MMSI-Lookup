@@ -22,6 +22,10 @@ abstract class AppDatabase : RoomDatabase() {
         const val KEY_LAST_UPDATED = "key_last_updated"
         const val KEY_DB_VERSION = "key_db_version"
         const val KEY_BUILD_TIMESTAMP = "key_build_timestamp"
+        const val KEY_BRIDGE_NIGHT_MODE = "bridge_night_mode_enabled"
+        const val KEY_AUTO_NIGHT_MODE_ENABLED = "key_auto_night_mode_enabled"
+        const val KEY_LAST_UPDATE_TIMESTAMP = "key_last_update_timestamp"
+        const val ONE_WEEK_MILLIS: Long = 7L * 24 * 60 * 60 * 1000L // 7 days (once per week)
 
         val DEFAULT_LAST_UPDATED: String
             get() = try { BuildConfig.BUILD_DATE } catch (e: Throwable) { "September 12, 2026" }
@@ -52,6 +56,7 @@ abstract class AppDatabase : RoomDatabase() {
                                 dao.setSetting(AppSettingEntity(KEY_LAST_UPDATED, DEFAULT_LAST_UPDATED))
                                 dao.setSetting(AppSettingEntity(KEY_DB_VERSION, DEFAULT_DB_VERSION))
                                 dao.setSetting(AppSettingEntity(KEY_BUILD_TIMESTAMP, BUILD_TIMESTAMP.toString()))
+                                dao.setSetting(AppSettingEntity(KEY_LAST_UPDATE_TIMESTAMP, BUILD_TIMESTAMP.toString()))
                             }
                         }
                     })

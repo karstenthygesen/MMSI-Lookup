@@ -63,6 +63,12 @@ class MmsiRepository(private val mmsiDao: MmsiDao) {
                         currentBuildTimestamp.toString()
                     )
                 )
+                mmsiDao.setSetting(
+                    AppSettingEntity(
+                        AppDatabase.KEY_LAST_UPDATE_TIMESTAMP,
+                        currentBuildTimestamp.toString()
+                    )
+                )
             } else {
                 if (mmsiDao.getSettingDirect(AppDatabase.KEY_LAST_UPDATED) == null) {
                     mmsiDao.setSetting(
@@ -80,6 +86,14 @@ class MmsiRepository(private val mmsiDao: MmsiDao) {
                         )
                     )
                 }
+                if (mmsiDao.getSettingDirect(AppDatabase.KEY_LAST_UPDATE_TIMESTAMP) == null) {
+                    mmsiDao.setSetting(
+                        AppSettingEntity(
+                            AppDatabase.KEY_LAST_UPDATE_TIMESTAMP,
+                            storedTimestamp.toString()
+                        )
+                    )
+                }
             }
         }
     }
@@ -94,6 +108,73 @@ class MmsiRepository(private val mmsiDao: MmsiDao) {
         return mmsiDao.getSetting(AppDatabase.KEY_DB_VERSION)
             .map { it ?: AppDatabase.DEFAULT_DB_VERSION }
             .flowOn(Dispatchers.IO)
+    }
+
+    fun getLastUpdateTimestamp(): Flow<Long> {
+        return mmsiDao.getSetting(AppDatabase.KEY_LAST_UPDATE_TIMESTAMP)
+            .map { it?.toLongOrNull() ?: 0L }
+            .flowOn(Dispatchers.IO)
+    }
+
+    suspend fun getLastUpdateTimestampDirect(): Long {
+        return withContext(Dispatchers.IO) {
+            mmsiDao.getSettingDirect(AppDatabase.KEY_LAST_UPDATE_TIMESTAMP)?.toLongOrNull()
+                ?: mmsiDao.getSettingDirect(AppDatabase.KEY_BUILD_TIMESTAMP)?.toLongOrNull()
+                ?: 0L
+        }
+    }
+
+    /**
+     * Checks if at least 1 week (7 days / 604,800,000 ms) has elapsed since the last database update.
+     */
+    suspend fun isWeeklyUpdateDue(): Boolean {
+        return withContext(Dispatchers.IO) {
+            val lastTimestamp = getLastUpdateTimestampDirect()
+            if (lastTimestamp <= 0L) return@withContext true
+            val now = System.currentTimeMillis()
+            (now - lastTimestamp) >= AppDatabase.ONE_WEEK_MILLIS
+        }
+    }
+
+    /**
+     * Returns the timestamp when the next weekly update will be eligible.
+     */
+    suspend fun getNextUpdateDueTimestamp(): Long {
+        return withContext(Dispatchers.IO) {
+            val lastTimestamp = getLastUpdateTimestampDirect()
+            if (lastTimestamp <= 0L) 0L else lastTimestamp + AppDatabase.ONE_WEEK_MILLIS
+        }
+    }
+
+    fun getBridgeNightMode(): Flow<Boolean> {
+        return mmsiDao.getSetting(AppDatabase.KEY_BRIDGE_NIGHT_MODE)
+            .map { it == "true" }
+            .flowOn(Dispatchers.IO)
+    }
+
+    suspend fun setBridgeNightMode(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            mmsiDao.setSetting(AppSettingEntity(AppDatabase.KEY_BRIDGE_NIGHT_MODE, enabled.toString()))
+        }
+    }
+
+    fun getAutoNightModeEnabled(): Flow<Boolean> {
+        return mmsiDao.getSetting(AppDatabase.KEY_AUTO_NIGHT_MODE_ENABLED)
+            .map { it == null || it == "true" } // Default to true
+            .flowOn(Dispatchers.IO)
+    }
+
+    suspend fun isAutoNightModeEnabledDirect(): Boolean {
+        return withContext(Dispatchers.IO) {
+            val setting = mmsiDao.getSettingDirect(AppDatabase.KEY_AUTO_NIGHT_MODE_ENABLED)
+            setting == null || setting == "true"
+        }
+    }
+
+    suspend fun setAutoNightModeEnabled(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            mmsiDao.setSetting(AppSettingEntity(AppDatabase.KEY_AUTO_NIGHT_MODE_ENABLED, enabled.toString()))
+        }
     }
 
     fun getAllCodes(): Flow<List<MmsiEntity>> {
@@ -154,7 +235,7 @@ class MmsiRepository(private val mmsiDao: MmsiDao) {
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
-    suspend fun updateDatabaseOnline(context: Context): DatabaseSyncResult {
+    suspend fun updateDatabaseOnline(context: Context, isAutoSync: Boolean = false): DatabaseSyncResult {
         return withContext(Dispatchers.IO) {
             if (!isNetworkAvailable(context)) {
                 return@withContext DatabaseSyncResult(
@@ -186,15 +267,18 @@ class MmsiRepository(private val mmsiDao: MmsiDao) {
             val allCodes = MmsiDataSeed.allCodes
             mmsiDao.insertAll(allCodes)
 
-            val currentDate = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH).format(Date())
-            val currentVersion = "${SimpleDateFormat("yyyy.MM", Locale.ENGLISH).format(Date())} (ITU-R M.585-9)"
+            val now = System.currentTimeMillis()
+            val currentDate = SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH).format(Date(now))
+            val currentVersion = "${SimpleDateFormat("yyyy.MM", Locale.ENGLISH).format(Date(now))} (ITU-R M.585-9)"
 
             mmsiDao.setSetting(AppSettingEntity(AppDatabase.KEY_LAST_UPDATED, currentDate))
             mmsiDao.setSetting(AppSettingEntity(AppDatabase.KEY_DB_VERSION, currentVersion))
+            mmsiDao.setSetting(AppSettingEntity(AppDatabase.KEY_LAST_UPDATE_TIMESTAMP, now.toString()))
 
+            val prefix = if (isAutoSync) "Weekly automatic update complete!" else "Database successfully updated!"
             DatabaseSyncResult(
                 success = true,
-                message = "Database successfully updated! Synchronized ${allCodes.size} ITU maritime registration codes.",
+                message = "$prefix Synchronized ${allCodes.size} ITU maritime registration codes.",
                 updatedCount = allCodes.size,
                 updatedDate = currentDate
             )

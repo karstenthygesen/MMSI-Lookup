@@ -17,11 +17,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -33,8 +34,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.DirectionsBoat
-import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.WifiOff
@@ -76,9 +79,11 @@ import com.example.ui.components.MmsiDirectorySheet
 import com.example.ui.components.MmsiInfoCard
 import com.example.ui.components.MmsiInfoDialog
 import com.example.ui.components.MmsiKeypad
+import com.example.ui.components.SmallFlag
 import com.example.ui.theme.MaritimeBlue
 import com.example.ui.theme.MaritimeCyan
 import com.example.ui.theme.MaritimeGreen
+import com.example.ui.theme.MaritimeTheme
 import com.example.ui.theme.NauticalGold
 import com.example.ui.theme.OceanNavyDark
 import com.example.ui.theme.SlateTextMuted
@@ -93,20 +98,10 @@ fun MmsiLookupScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val popularPresets = listOf(
-        PresetItem("235", "United Kingdom", "🇬🇧"),
-        PresetItem("338", "USA", "🇺🇸"),
-        PresetItem("351", "Panama", "🇵🇦"),
-        PresetItem("636", "Liberia", "🇱🇷"),
-        PresetItem("538", "Marshall Is.", "🇲🇭"),
-        PresetItem("563", "Singapore", "🇸🇬"),
-        PresetItem("227", "France", "🇫🇷"),
-        PresetItem("257", "Norway", "🇳🇴")
-    )
-
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
@@ -124,13 +119,13 @@ fun MmsiLookupScreen(
                             Icon(
                                 imageVector = Icons.Default.WifiOff,
                                 contentDescription = null,
-                                tint = MaritimeCyan,
+                                tint = MaritimeTheme.accent,
                                 modifier = Modifier.size(11.dp)
                             )
                             Text(
-                                text = "Offline DB • Updated ${uiState.lastUpdatedDate}",
+                                text = if (uiState.isBridgeNightMode) "Bridge Night Mode (Red) • Offline" else "Offline DB • Updated ${uiState.lastUpdatedDate}",
                                 fontSize = 11.sp,
-                                color = MaritimeCyan,
+                                color = MaritimeTheme.accent,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -149,14 +144,25 @@ fun MmsiLookupScreen(
                     }
                 },
                 actions = {
+                    // Coast Guard Bridge Night Mode Toggle Button
+                    IconButton(
+                        onClick = { viewModel.toggleBridgeNightMode() },
+                        modifier = Modifier.testTag("bridge_night_mode_toggle_button")
+                    ) {
+                        Icon(
+                            imageVector = if (uiState.isBridgeNightMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = if (uiState.isBridgeNightMode) "Switch to Standard Day Mode" else "Switch to Coast Guard Bridge Night Mode (Preserve Night Vision)",
+                            tint = if (uiState.isBridgeNightMode) MaritimeTheme.accent else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     IconButton(
                         onClick = { viewModel.setShowDirectorySheet(true) },
                         modifier = Modifier.testTag("open_directory_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.FormatListBulleted,
+                            imageVector = Icons.AutoMirrored.Filled.FormatListBulleted,
                             contentDescription = "Browse all ITU codes",
-                            tint = MaritimeCyan
+                            tint = MaritimeTheme.accent
                         )
                     }
                 },
@@ -169,8 +175,7 @@ fun MmsiLookupScreen(
             MmsiKeypad(
                 onDigitClick = { viewModel.onDigitEntered(it) },
                 onBackspaceClick = { viewModel.onBackspace() },
-                onClearClick = { viewModel.onClear() },
-                modifier = Modifier.navigationBarsPadding()
+                onClearClick = { viewModel.onClear() }
             )
         }
     ) { innerPadding ->
@@ -182,6 +187,34 @@ fun MmsiLookupScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Background Weekly Auto-Sync In-Progress Banner
+            AnimatedVisibility(visible = uiState.isAutoUpdating) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaritimeTheme.accent.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaritimeTheme.accent.copy(alpha = 0.35f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = MaritimeTheme.accent
+                        )
+                        Text(
+                            text = "Auto-syncing ITU maritime database (Weekly update)...",
+                            fontSize = 12.sp,
+                            color = MaritimeTheme.accent,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
             // 3-Digit Input Boxes Display
             Card(
                 modifier = Modifier
@@ -234,7 +267,7 @@ fun MmsiLookupScreen(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
-                                color = MaritimeCyan
+                                color = MaritimeTheme.accent
                             )
                         }
                     }
@@ -252,7 +285,7 @@ fun MmsiLookupScreen(
                                 else -> "Maritime Identification Digit verified"
                             },
                             fontSize = 11.sp,
-                            color = if (uiState.isExactMidFound) MaritimeGreen else SlateTextMuted
+                            color = if (uiState.isExactMidFound) MaritimeTheme.success else MaritimeTheme.textSecondary
                         )
 
                         if (uiState.inputDigits.isNotEmpty()) {
@@ -260,62 +293,12 @@ fun MmsiLookupScreen(
                                 text = "Reset",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = NauticalGold,
+                                color = MaritimeTheme.gold,
                                 modifier = Modifier
                                     .clickable { viewModel.onClear() }
                                     .padding(4.dp)
                                     .testTag("reset_input_btn")
                             )
-                        }
-                    }
-                }
-            }
-
-            // Quick Preset Maritime Flags Row
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "Quick Maritime Registrations",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SlateTextSecondary
-                )
-
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 2.dp)
-                ) {
-                    items(popularPresets) { preset ->
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (uiState.inputDigits.take(3) == preset.mid) MaritimeCyan else Color.Transparent
-                            ),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { viewModel.selectMid(preset.mid) }
-                                .testTag("preset_${preset.mid}")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(preset.flag, fontSize = 16.sp)
-                                Text(
-                                    text = preset.name,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = preset.mid,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaritimeCyan
-                                )
-                            }
                         }
                     }
                 }
@@ -333,12 +316,12 @@ fun MmsiLookupScreen(
                             text = "Recent Lookups",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = SlateTextSecondary
+                            color = MaritimeTheme.textSecondary
                         )
                         Text(
                             text = "Clear",
                             fontSize = 11.sp,
-                            color = SlateTextMuted,
+                            color = MaritimeTheme.textSecondary,
                             modifier = Modifier
                                 .clickable { viewModel.clearRecents() }
                                 .padding(horizontal = 4.dp, vertical = 2.dp)
@@ -353,6 +336,7 @@ fun MmsiLookupScreen(
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                border = if (uiState.isBridgeNightMode) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)) else null,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
                                     .clickable { viewModel.selectMid(recent.mid) }
@@ -363,7 +347,10 @@ fun MmsiLookupScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Text(recent.flagEmoji, fontSize = 14.sp)
+                                    SmallFlag(
+                                        flagEmoji = recent.flagEmoji,
+                                        fontSize = 20.sp
+                                    )
                                     Text(
                                         text = recent.mid,
                                         fontSize = 12.sp,
@@ -394,7 +381,7 @@ fun MmsiLookupScreen(
                     }
 
                     // 3 digits entered, but no match (unallocated ITU code)
-                    state.inputDigits.length >= 3 && state.currentResult == null -> {
+                    state.inputDigits.length >= 3 -> {
                         Card(
                             modifier = Modifier.fillMaxWidth().testTag("unallocated_code_card"),
                             shape = RoundedCornerShape(16.dp),
@@ -471,7 +458,10 @@ fun MmsiLookupScreen(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                                             ) {
-                                                Text(match.flagEmoji, fontSize = 16.sp)
+                                                Text(
+                                                    text = match.flagEmoji,
+                                                    fontSize = 20.sp
+                                                )
                                                 Text(
                                                     text = match.countryName,
                                                     fontSize = 13.sp,
@@ -481,7 +471,7 @@ fun MmsiLookupScreen(
                                                     text = match.mid,
                                                     fontSize = 12.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = MaritimeCyan
+                                                    color = MaritimeTheme.accent
                                                 )
                                             }
                                         }
@@ -511,13 +501,13 @@ fun MmsiLookupScreen(
                                     modifier = Modifier
                                         .size(64.dp)
                                         .clip(CircleShape)
-                                        .background(MaritimeCyan.copy(alpha = 0.12f)),
+                                        .background(MaritimeTheme.accent.copy(alpha = 0.12f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.DirectionsBoat,
                                         contentDescription = null,
-                                        tint = MaritimeCyan,
+                                        tint = MaritimeTheme.accent,
                                         modifier = Modifier.size(36.dp)
                                     )
                                 }
@@ -532,7 +522,7 @@ fun MmsiLookupScreen(
                                 Text(
                                     text = "Enter any 3-digit MID code (e.g. 235 for United Kingdom, 338 for USA, 351 for Panama) using the keypad below. Full 9-digit MMSIs are also accepted.",
                                     fontSize = 13.sp,
-                                    color = SlateTextSecondary,
+                                    color = MaritimeTheme.textSecondary,
                                     textAlign = TextAlign.Center,
                                     lineHeight = 18.sp
                                 )
@@ -544,13 +534,13 @@ fun MmsiLookupScreen(
                                     Icon(
                                         imageVector = Icons.Default.CheckCircle,
                                         contentDescription = null,
-                                        tint = MaritimeGreen,
+                                        tint = MaritimeTheme.success,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
                                         text = "Works 100% offline at sea with local SQLite Room database",
                                         fontSize = 11.sp,
-                                        color = SlateTextMuted
+                                        color = MaritimeTheme.textSecondary
                                     )
                                 }
                             }
@@ -586,6 +576,17 @@ fun MmsiLookupScreen(
             lastUpdatedDate = uiState.lastUpdatedDate,
             databaseVersion = uiState.databaseVersion,
             isUpdating = uiState.isUpdatingDatabase,
+            isAutoUpdating = uiState.isAutoUpdating,
+            isInternetConnected = uiState.isInternetConnected,
+            nextAutoUpdateDueText = uiState.nextAutoUpdateDueText,
+            isWeeklyUpdateDue = uiState.isWeeklyUpdateDue,
+            isAutoNightModeEnabled = uiState.isAutoNightModeEnabled,
+            isAfterSundown = uiState.isAfterSundown,
+            solarStatusDescription = uiState.solarStatusDescription,
+            solarSunriseTimeText = uiState.solarSunriseTimeText,
+            solarSunsetTimeText = uiState.solarSunsetTimeText,
+            solarTimeZoneId = uiState.solarTimeZoneId,
+            onToggleAutoNightMode = { viewModel.toggleAutoNightMode() },
             updateResultMessage = uiState.updateResultMessage,
             updateResultSuccess = uiState.updateResultSuccess,
             onUpdateClick = { viewModel.updateDatabaseOnline() },
@@ -603,9 +604,11 @@ private fun DigitSlot(
     isActive: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val accentColor = MaritimeTheme.accent
+    val goldColor = MaritimeTheme.gold
     val borderColor = when {
-        digit.isNotEmpty() -> MaritimeCyan
-        isActive -> NauticalGold
+        digit.isNotEmpty() -> accentColor
+        isActive -> goldColor
         else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     }
 
@@ -630,14 +633,8 @@ private fun DigitSlot(
                 text = "-",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Light,
-                color = SlateTextMuted
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
         }
     }
 }
-
-private data class PresetItem(
-    val mid: String,
-    val name: String,
-    val flag: String
-)

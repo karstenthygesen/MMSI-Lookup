@@ -1,6 +1,6 @@
 {
   "name": "MMSI Lookup",
-  "description": "Offline maritime MMSI registration code lookup to identify country and flag from the first 3 digits.",
+  "description": "Offline maritime MMSI registration code lookup to identify country and flag from the first 3 digits, featuring Coast Guard Bridge Night Vision mode.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

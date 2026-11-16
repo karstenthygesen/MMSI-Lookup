@@ -7,10 +7,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
@@ -30,8 +36,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.MaritimeCyan
-import com.example.ui.theme.NauticalGold
+import com.example.ui.theme.MaritimeTheme
 
 @Composable
 fun MmsiKeypad(
@@ -40,15 +45,18 @@ fun MmsiKeypad(
     onClearClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isBridgeNight = MaritimeTheme.isBridgeNight
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+        color = if (isBridgeNight) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        tonalElevation = 4.dp
+        tonalElevation = if (isBridgeNight) 0.dp else 4.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -89,7 +97,7 @@ fun MmsiKeypad(
             ) {
                 KeypadActionButton(
                     label = "C",
-                    contentColor = NauticalGold,
+                    contentColor = MaritimeTheme.gold,
                     testTag = "keypad_clear_btn",
                     modifier = Modifier.weight(1f),
                     onClick = onClearClick
@@ -102,6 +110,7 @@ fun MmsiKeypad(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Backspace,
                             contentDescription = "Backspace",
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(22.dp)
                         )
                     },
@@ -121,6 +130,7 @@ private fun KeypadDigitButton(
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val accentColor = MaritimeTheme.accent
     Box(
         modifier = modifier
             .height(52.dp)
@@ -128,7 +138,7 @@ private fun KeypadDigitButton(
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(color = MaritimeCyan),
+                indication = ripple(color = accentColor),
                 onClick = onClick
             )
             .testTag("keypad_digit_$digit"),

@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,8 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.MmsiEntity
-import com.example.ui.theme.MaritimeCyan
-import com.example.ui.theme.SlateTextSecondary
+import com.example.ui.theme.MaritimeTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +60,9 @@ fun MmsiDirectorySheet(
     onEntrySelect: (MmsiEntity) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val isBridgeNight = MaritimeTheme.isBridgeNight
+    val accentColor = MaritimeTheme.accent
+    val secondaryTextColor = MaritimeTheme.textSecondary
     val regions = listOf("All", "Europe", "North America", "Asia", "Oceania", "Africa", "South America")
 
     ModalBottomSheet(
@@ -70,6 +74,8 @@ fun MmsiDirectorySheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -90,7 +96,7 @@ fun MmsiDirectorySheet(
                     Text(
                         text = "${results.size} allocated country codes (ITU-R M.585)",
                         fontSize = 12.sp,
-                        color = SlateTextSecondary
+                        color = secondaryTextColor
                     )
                 }
 
@@ -118,7 +124,7 @@ fun MmsiDirectorySheet(
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = null,
-                        tint = MaritimeCyan
+                        tint = accentColor
                     )
                 },
                 trailingIcon = {
@@ -134,7 +140,7 @@ fun MmsiDirectorySheet(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaritimeCyan,
+                    focusedBorderColor = accentColor,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
                 )
             )
@@ -151,13 +157,13 @@ fun MmsiDirectorySheet(
                         onClick = { onRegionSelect(region) },
                         label = { Text(region, fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaritimeCyan.copy(alpha = 0.2f),
-                            selectedLabelColor = MaritimeCyan
+                            selectedContainerColor = accentColor.copy(alpha = 0.2f),
+                            selectedLabelColor = accentColor
                         ),
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true,
                             selected = isSelected,
-                            borderColor = if (isSelected) MaritimeCyan else MaterialTheme.colorScheme.outlineVariant
+                            borderColor = if (isSelected) accentColor else MaterialTheme.colorScheme.outlineVariant
                         )
                     )
                 }
@@ -182,7 +188,8 @@ fun MmsiDirectorySheet(
                             .clip(RoundedCornerShape(12.dp))
                             .clickable { onEntrySelect(item) }
                             .testTag("dir_item_${item.mid}"),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        border = if (isBridgeNight) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)) else null
                     ) {
                         Row(
                             modifier = Modifier
@@ -191,9 +198,9 @@ fun MmsiDirectorySheet(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(
-                                text = item.flagEmoji,
-                                fontSize = 28.sp
+                            SmallFlag(
+                                flagEmoji = item.flagEmoji,
+                                fontSize = 32.sp
                             )
 
                             Column(modifier = Modifier.weight(1f)) {
@@ -206,21 +213,21 @@ fun MmsiDirectorySheet(
                                 Text(
                                     text = "${item.region} • ISO: ${item.isoCode}",
                                     fontSize = 11.sp,
-                                    color = SlateTextSecondary
+                                    color = secondaryTextColor
                                 )
                             }
 
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = MaritimeCyan.copy(alpha = 0.15f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, MaritimeCyan.copy(alpha = 0.4f))
+                                color = accentColor.copy(alpha = 0.15f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.4f))
                             ) {
                                 Text(
                                     text = item.mid,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaritimeCyan
+                                    color = accentColor
                                 )
                             }
                         }

@@ -1,6 +1,6 @@
 # Privacy Policy for MMSI Lookup
 
-**Last Updated:** September 12, 2026
+**Last Updated:** November 16, 2026
 
 This Privacy Policy describes how **MMSI Lookup** ("the Application"), developed by **Karsten Thygesen** ("we", "us", or "our"), handles information when you install and use the Application.
 
@@ -21,15 +21,14 @@ The Application does **not** require any user registration, account creation, na
 
 ### B. Device Permissions & Hardware Data
 - **INTERNET & ACCESS_NETWORK_STATE**: 
-  - Used exclusively when the user manually initiates an online database synchronization or when checking network connectivity status.
-  - Used by standard platform infrastructure libraries (such as Firebase / Google Play Services) for basic runtime integrity and crash prevention.
+  - Used exclusively to check internet availability and perform periodic (weekly) or user-initiated database synchronization checks.
 - We do **not** access your device location (GPS), camera, microphone, contacts, photos, media files, or external storage.
 
 ### C. Local On-Device Data Storage
 The Application utilizes local SQLite storage (Room database) stored strictly on your local device:
 - **Search History (Recent Lookups):** Recent MMSI codes and lookup timestamps are stored locally on your device for your convenience. This data never leaves your device and can be cleared at any time directly within the app by tapping the "Clear" button.
 - **Offline Maritime Registry Database:** A pre-packaged, offline copy of the ITU-R M.585 registry is stored locally so lookups function completely without an internet connection.
-- **App Configuration:** Local flags such as the last synchronized database timestamp and version string.
+- **App Configuration:** Local preferences such as Coast Guard Bridge Night Mode, auto-sundown toggle, and the last synchronized database timestamp and version string.
 
 None of this locally stored data is transmitted to external servers or accessible by third parties.
 
@@ -39,8 +38,8 @@ None of this locally stored data is transmitted to external servers or accessibl
 
 The Application is fully functional without an active internet connection. Network activity is limited to:
 
-1. **User-Initiated Database Updates:** When you tap "Update Database Online", the Application connects to retrieve the latest public maritime MID registry from the official International Telecommunication Union (ITU) or public GitHub mirror. No user identifiers or query search terms are sent during this update.
-2. **Google Play Services & Firebase:** The app may use Google Play Services / Firebase libraries for app security and distribution verification (such as App Check). These services may process basic technical telemetry (e.g., operating system version, device model) governed by Google's Privacy Policy at [https://policies.google.com/privacy](https://policies.google.com/privacy).
+1. **Connectivity Verification & Database Updates:** When you tap "Update Database Online" (or during the optional weekly connectivity check), the Application performs a lightweight HTTPS connectivity check (`generate_204`) and synchronizes the local ITU maritime MID dataset. No user identifiers, analytics, advertising IDs, or MMSI search terms are ever transmitted.
+2. **No Advertising or Analytics SDKs:** The Application contains no third-party advertising networks, analytics trackers, or social media SDKs.
 
 ---
 

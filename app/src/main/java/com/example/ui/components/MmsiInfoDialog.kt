@@ -40,6 +40,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,18 +57,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
-import com.example.ui.theme.MaritimeCyan
-import com.example.ui.theme.MaritimeGreen
-import com.example.ui.theme.MaritimeRed
-import com.example.ui.theme.NauticalGold
-import com.example.ui.theme.SlateTextMuted
-import com.example.ui.theme.SlateTextSecondary
+import com.example.ui.theme.MaritimeTheme
 
 @Composable
 fun MmsiInfoDialog(
     lastUpdatedDate: String,
     databaseVersion: String,
     isUpdating: Boolean,
+    isAutoUpdating: Boolean = false,
+    isInternetConnected: Boolean = false,
+    nextAutoUpdateDueText: String = "",
+    isWeeklyUpdateDue: Boolean = false,
+    isAutoNightModeEnabled: Boolean = true,
+    isAfterSundown: Boolean = false,
+    solarStatusDescription: String = "",
+    solarSunriseTimeText: String = "",
+    solarSunsetTimeText: String = "",
+    solarTimeZoneId: String = "",
+    onToggleAutoNightMode: () -> Unit = {},
     updateResultMessage: String?,
     updateResultSuccess: Boolean?,
     onUpdateClick: () -> Unit,
@@ -74,6 +82,11 @@ fun MmsiInfoDialog(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val isBridgeNight = MaritimeTheme.isBridgeNight
+    val accentColor = MaritimeTheme.accent
+    val goldColor = MaritimeTheme.gold
+    val successColor = MaritimeTheme.success
+    val secondaryTextColor = MaritimeTheme.textSecondary
     val contactEmail = "karthy@gmail.com"
     val contactName = "Karsten Thygesen"
     val appVersion = "v${try { BuildConfig.VERSION_NAME } catch (e: Throwable) { "1.2.0" }}"
@@ -93,13 +106,13 @@ fun MmsiInfoDialog(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(MaritimeCyan.copy(alpha = 0.15f)),
+                        .background(accentColor.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Info,
                         contentDescription = null,
-                        tint = MaritimeCyan,
+                        tint = accentColor,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -113,7 +126,7 @@ fun MmsiInfoDialog(
                     Text(
                         text = "Version $appVersion • Built $buildDate",
                         fontSize = 12.sp,
-                        color = SlateTextSecondary
+                        color = secondaryTextColor
                     )
                 }
             }
@@ -125,6 +138,118 @@ fun MmsiInfoDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Coast Guard Bridge Night Mode Info Card
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        accentColor.copy(alpha = 0.4f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "COAST GUARD BRIDGE NIGHT MODE",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.8.sp,
+                            color = accentColor
+                        )
+                        Text(
+                            text = "Engineered for bridge watchstanders, coast guard operators, and SAR cutters. Emits monochromatic red light (~650nm) on a pitch-black background to protect rhodopsin in rod cells and preserve scotopic night vision.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = 16.sp
+                        )
+
+                        // Auto Sundown Detection Block (Zero Location Access)
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                accentColor.copy(alpha = 0.25f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "AUTO SUNDOWN ACTIVATION",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp,
+                                            color = accentColor
+                                        )
+                                        Text(
+                                            text = "Zero Location Permissions",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = successColor
+                                        )
+                                    }
+
+                                    Switch(
+                                        checked = isAutoNightModeEnabled,
+                                        onCheckedChange = { onToggleAutoNightMode() },
+                                        modifier = Modifier.testTag("auto_night_mode_switch"),
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                            checkedTrackColor = accentColor
+                                        )
+                                    )
+                                }
+
+                                Text(
+                                    text = "Calculates solar sunset & sunrise astronomically using your device's timezone without requiring GPS or location access. When launched after sundown, Bridge Night Mode is enabled automatically.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    lineHeight = 15.sp
+                                )
+
+                                if (solarSunriseTimeText.isNotEmpty() && solarSunsetTimeText.isNotEmpty()) {
+                                    Text(
+                                        text = "Solar Schedule: Sunset ~$solarSunsetTimeText • Sunrise ~$solarSunriseTimeText (${solarTimeZoneId.substringAfterLast('/')})",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = secondaryTextColor
+                                    )
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isAfterSundown) accentColor else goldColor)
+                                    )
+                                    Text(
+                                        text = if (isAfterSundown) "Currently: After Sundown (Night mode scheduled)" else "Currently: Daylight (Day mode active)",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isAfterSundown) accentColor else goldColor
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Database Status & Last Updated Card
                 Surface(
                     shape = RoundedCornerShape(14.dp),
@@ -149,17 +274,17 @@ fun MmsiInfoDialog(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.8.sp,
-                                color = MaritimeCyan
+                                color = accentColor
                             )
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = MaritimeGreen.copy(alpha = 0.15f)
+                                color = successColor.copy(alpha = 0.15f)
                             ) {
                                 Text(
                                     text = "Offline Ready",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaritimeGreen,
+                                    color = successColor,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
@@ -169,7 +294,7 @@ fun MmsiInfoDialog(
                             Text(
                                 text = "Last Updated:",
                                 fontSize = 11.sp,
-                                color = SlateTextSecondary
+                                color = secondaryTextColor
                             )
                             Text(
                                 text = lastUpdatedDate,
@@ -184,7 +309,7 @@ fun MmsiInfoDialog(
                             Text(
                                 text = "ITU Specification:",
                                 fontSize = 11.sp,
-                                color = SlateTextSecondary
+                                color = secondaryTextColor
                             )
                             Text(
                                 text = databaseVersion,
@@ -200,15 +325,79 @@ fun MmsiInfoDialog(
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = MaritimeGreen,
+                                tint = successColor,
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = "Build Auto-Sync: Fresh ITU release bundled with this build",
                                 fontSize = 11.sp,
-                                color = MaritimeGreen,
+                                color = successColor,
                                 fontWeight = FontWeight.Medium
                             )
+                        }
+
+                        // Automatic Weekly Sync Card
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                accentColor.copy(alpha = 0.25f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Sync,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "AUTOMATIC WEEKLY SYNC",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp,
+                                        color = accentColor
+                                    )
+                                }
+                                Text(
+                                    text = "Automatically checks for ITU registry updates once per week whenever internet connectivity is detected.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    lineHeight = 15.sp
+                                )
+                                Text(
+                                    text = "Schedule: $nextAutoUpdateDueText",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (isWeeklyUpdateDue) goldColor else secondaryTextColor
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isInternetConnected) successColor else secondaryTextColor.copy(alpha = 0.5f))
+                                    )
+                                    Text(
+                                        text = if (isInternetConnected) "Internet Connected — auto-sync active" else "Offline — will auto-sync on schedule when connected",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isInternetConnected) successColor else secondaryTextColor
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -224,9 +413,9 @@ fun MmsiInfoDialog(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Connect to the Internet to verify and synchronize the latest maritime identification codes from the registry.",
+                        text = "The app automatically checks once per week when online. You can also manually trigger an immediate synchronization at any time.",
                         fontSize = 12.sp,
-                        color = SlateTextSecondary,
+                        color = secondaryTextColor,
                         lineHeight = 16.sp
                     )
 
@@ -239,18 +428,22 @@ fun MmsiInfoDialog(
                             .testTag("update_database_button"),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaritimeCyan,
-                            contentColor = Color(0xFF07111E)
+                            containerColor = accentColor,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
                         )
                     ) {
                         if (isUpdating) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
-                                color = Color(0xFF07111E)
+                                color = MaterialTheme.colorScheme.onPrimary
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Updating Database...", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = if (isAutoUpdating) "Auto-Syncing Database..." else "Updating Database...",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Sync,
@@ -265,12 +458,13 @@ fun MmsiInfoDialog(
                     // Result message banner
                     if (updateResultMessage != null) {
                         val isSuccess = updateResultSuccess == true
+                        val bannerColor = if (isSuccess) successColor else Color(0xFFEF4444)
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (isSuccess) MaritimeGreen.copy(alpha = 0.12f) else MaritimeRed.copy(alpha = 0.12f),
+                            color = bannerColor.copy(alpha = 0.12f),
                             border = androidx.compose.foundation.BorderStroke(
                                 1.dp,
-                                if (isSuccess) MaritimeGreen.copy(alpha = 0.4f) else MaritimeRed.copy(alpha = 0.4f)
+                                bannerColor.copy(alpha = 0.4f)
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -282,7 +476,7 @@ fun MmsiInfoDialog(
                                 Icon(
                                     imageVector = if (isSuccess) Icons.Default.CheckCircle else Icons.Default.ErrorOutline,
                                     contentDescription = null,
-                                    tint = if (isSuccess) MaritimeGreen else MaritimeRed,
+                                    tint = bannerColor,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Text(
@@ -320,7 +514,7 @@ fun MmsiInfoDialog(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.8.sp,
-                            color = NauticalGold
+                            color = goldColor
                         )
 
                         Text(
@@ -345,7 +539,7 @@ fun MmsiInfoDialog(
                                 Text(
                                     text = contactEmail,
                                     fontSize = 13.sp,
-                                    color = MaritimeCyan,
+                                    color = accentColor,
                                     modifier = Modifier.testTag("contact_email_text")
                                 )
                             }
@@ -386,7 +580,7 @@ fun MmsiInfoDialog(
                                     Icon(
                                         imageVector = Icons.Default.Email,
                                         contentDescription = "Send email to Karsten Thygesen",
-                                        tint = NauticalGold,
+                                        tint = goldColor,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -401,7 +595,7 @@ fun MmsiInfoDialog(
                 onClick = onDismiss,
                 modifier = Modifier.testTag("close_info_dialog_btn")
             ) {
-                Text("Close", color = MaritimeCyan, fontWeight = FontWeight.SemiBold)
+                Text("Close", color = accentColor, fontWeight = FontWeight.SemiBold)
             }
         }
     )
